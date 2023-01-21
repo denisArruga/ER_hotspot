@@ -50,8 +50,37 @@ def ComputeAlphaAndDerivative(cPsi, sAlpha, cPsi_f_sAlpha):
             DCPsi_DSAlpha[i] = a
     return sAlpha_, DCPsi_DSAlpha
 
+def ComputeFlux(iota,gamma,t0,omega,a,b,r,R,phi_R):
+    # Compute Psi(alpha)
+    alpha = np.linspace(0,np.pi/2,100)
+    sigma = R*np.sin(alpha)/np.sqrt(a[0])
+    f_psi_alpha = Psi(sigma, a, b, r)
+    t = Shapiro(sigma, a, b, r)
+    # Compute flux
+    psi = np.arccos(np.cos(iota)*np.cos(gamma)+np.sin(iota)*np.sin(gamma)*np.cos(omega*t0))
+    id_nvis = np.where(psi>f_psi_alpha[-1])
+    psi[id_nvis] = f_psi_alpha[-1]
+    f_1 = interp1d(f_psi_alpha, alpha, kind='cubic')
+    alpha_2 = f_1(psi)
+    df_1 = interp1d(f_psi_alpha, np.gradient(alpha)/np.gradient(f_psi_alpha), kind='cubic')
+    dAlpha_dPsi = df_1(psi)
+    beta = R*omega*np.sin(gamma)/np.sqrt(a[0])
+    cosXi = -np.sin(alpha_2)*np.sin(iota)*np.sin(omega*t0)/np.sin(psi)
+    delta = np.sqrt(1-(beta/cst.c)**2)/(1-(beta/cst.c)*cosXi)
+    Flux = phi_R*delta**5*a[0]*np.cos(alpha_2)*np.sin(alpha_2)*dAlpha_dPsi/np.sin(psi)
+    Flux[id_nvis] = 0
+    # Compute observed time
+    sigma = R*np.sin(alpha_2)/np.sqrt(a[0])
+    delta_t = Shapiro(sigma, a, b, r)
+    t_obs = t0+delta_t-delta_t[0]
+    return Flux, t_obs
 
-def ComputeFlux():
+def ComputeFluxTot(iota,gamma,t0,omega,a,b,r,R,phi_R):
+    Flux, t_obs = ComputeFlux(iota,gamma,t0,omega,a,b,r,R,phi_R)
+    Flux_opposite, t_obs = ComputeFlux(iota,np.pi-gamma,t0,omega,a,b,r,R,phi_R)
+    return Flux_opposite+Flux, t_obs
+
+def PlotFlux():
     # initialize variable
     PhiInit = 1
     PsiInit = 0
@@ -73,7 +102,7 @@ def ComputeFlux():
         if i==2:
             lag_mode = 0
             dilaton_active = True
-            colorlist[2] = 'orangered'
+            colorlist[2] = 'red'
             labels[2] = 'ER ($L_m=T$)'
             linestyles[2] = '--'
         elif i==0:
@@ -85,7 +114,7 @@ def ComputeFlux():
         if i==1:
             lag_mode = 1
             dilaton_active = True
-            colorlist[1] = 'red'
+            colorlist[1] = 'orangered'
             labels[1] = 'ER ($L_m=-c^2\\rho$)'
             linestyles[1] = '--'
         if i==3:
@@ -95,7 +124,7 @@ def ComputeFlux():
             labels[3] = 'ER ($L_m=P$)'
             linestyles[3] = '--'
         # Compute NS exterior space-time
-        tov = TOV(rhoInit, PsiInit, PhiInit, radiusMax_in, radiusMax_out, Npoint, lag_mode, dilaton_active, log_active, 0)
+        tov = TOV(rhoInit, PsiInit, PhiInit, radiusMax_in, radiusMax_out, Npoint, lag_mode, dilaton_active, log_active, 1)
         tov.ComputeTOV()
         R = tov.radiusStar
         r = tov.r_ext
